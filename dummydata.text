@@ -1,0 +1,59 @@
+ALTER TABLE locations AUTO_INCREMENT = 1;
+
+INSERT INTO locations (id, code, name)
+VALUES
+(1, 'WH-001', 'Main Storage'),
+(2, 'WH-002', 'Front Counter');
+
+ALTER TABLE products AUTO_INCREMENT = 1;
+
+INSERT INTO products (sku, name, description, category, unit, expiration_date, min_qty, max_qty, warehouse_id)
+VALUES
+-- Coffee Beans
+('CB001', 'Arabica Coffee Beans', 'High quality Arabica beans, medium roast.', 'Coffee Beans', 'kg', '2025-12-31', 5, 50, 1),
+('CB002', 'Robusta Coffee Beans', 'Strong flavor, used for espresso blends.', 'Coffee Beans', 'kg', '2025-12-31', 3, 30, 1),
+
+-- Milk
+('ML001', 'Whole Milk', 'Fresh dairy milk, used for lattes and cappuccinos.', 'Dairy', 'liters', '2025-10-01', 10, 100, 1),
+('ML002', 'Almond Milk', 'Non-dairy alternative, unsweetened.', 'Dairy Alternative', 'liters', '2025-11-01', 5, 50, 1),
+('ML003', 'Oat Milk', 'Creamy plant-based milk.', 'Dairy Alternative', 'liters', '2025-11-15', 5, 50, 1),
+
+-- Syrups
+('SY001', 'Vanilla Syrup', 'Used for flavored lattes.', 'Syrups', 'bottle', '2026-01-01', 5, 30, 1),
+('SY002', 'Caramel Syrup', 'Used in caramel macchiatos and frappes.', 'Syrups', 'bottle', '2026-01-01', 5, 30, 1),
+('SY003', 'Hazelnut Syrup', 'Classic syrup for nutty flavors.', 'Syrups', 'bottle', '2026-01-01', 5, 30, 1),
+
+-- Cups
+('CP001', '12oz Paper Cups', 'Standard serving cups for hot beverages.', 'Packaging', 'pcs', NULL, 100, 1000, 2),
+('CP002', '16oz Paper Cups', 'Larger size for iced drinks.', 'Packaging', 'pcs', NULL, 100, 1000, 2),
+('CP003', 'Cup Lids', 'Lids compatible with 12oz and 16oz cups.', 'Packaging', 'pcs', NULL, 200, 2000, 2),
+
+-- Sweeteners
+('SW001', 'White Sugar', 'Used in all beverages.', 'Sweeteners', 'kg', '2026-03-01', 2, 20, 1),
+('SW002', 'Brown Sugar', 'Preferred for iced drinks.', 'Sweeteners', 'kg', '2026-03-01', 1, 10, 1),
+('SW003', 'Stevia Packets', 'Low-calorie sweetener.', 'Sweeteners', 'box', '2026-05-01', 1, 5, 1),
+
+-- Others
+('OT001', 'Ice Cubes', 'Packaged ice for cold drinks.', 'Other', 'kg', '2025-10-01', 10, 100, 1),
+('OT002', 'Whipped Cream', 'Used as topping for frappes.', 'Dairy', 'can', '2025-11-01', 5, 20, 1),
+('OT003', 'Espresso Machine Cleaner', 'Used weekly for machine maintenance.', 'Cleaning Supplies', 'bottle', '2027-01-01', 1, 5, 1);
+
+
+INSERT INTO product_locations (product_id, location_id, quantity) VALUES
+(1, 1, 20),
+(2, 1, 15),
+(3, 1, 50),
+(4, 1, 30),
+(5, 1, 30),
+(6, 1, 10),
+(7, 1, 10),
+(8, 1, 10),
+(9, 2, 500),
+(10, 2, 500),
+(11, 2, 1000),
+(12, 1, 10),
+(13, 1, 5),
+(14, 1, 2),
+(15, 1, 100),
+(16, 1, 10),
+(17, 1, 3);

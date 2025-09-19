@@ -1,5 +1,5 @@
 <?php
-require 'db.php';
+require '../db.php';
 
 // ---------- Handle Add / Update ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -12,21 +12,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expiration_date = $_POST['expiration_date'] ?: null;
     $min_qty = (int)($_POST['min_qty'] ?? 0);
     $max_qty = (int)($_POST['max_qty'] ?? 0);
+    $warehouse_id = $_POST['warehouse_id'] ?? null;
 
     try {
         if ($id) {
-            // Update
-            $stmt = $pdo->prepare("UPDATE products 
-                SET sku=?, name=?, description=?, category=?, unit=?, expiration_date=?, min_qty=?, max_qty=? 
-                WHERE id=?");
-            $stmt->execute([$sku,$name,$desc,$category,$unit,$expiration_date,$min_qty,$max_qty,$id]);
-        } else {
-            // Add new
-            $stmt = $pdo->prepare("INSERT INTO products 
-                (sku,name,description,category,unit,expiration_date,min_qty,max_qty) 
-                VALUES (?,?,?,?,?,?,?,?)");
-            $stmt->execute([$sku,$name,$desc,$category,$unit,$expiration_date,$min_qty,$max_qty]);
-        }
+    // Update product including warehouse_id
+    $stmt = $pdo->prepare("UPDATE products 
+        SET sku=?, name=?, description=?, category=?, unit=?, expiration_date=?, min_qty=?, max_qty=?, warehouse_id=? 
+        WHERE id=?");
+    $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id, $id]);
+
+    // Update product_locations table if warehouse selected
+    if ($warehouse_id) {
+        $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity)
+                       VALUES (?, ?, 0)
+                       ON DUPLICATE KEY UPDATE location_id=VALUES(location_id)")
+            ->execute([$id, $warehouse_id]);
+    } else {
+        // Remove warehouse mapping if deselected
+        $pdo->prepare("DELETE FROM product_locations WHERE product_id=?")->execute([$id]);
+    }
+} else {
+    // Add new product including warehouse_id
+    $stmt = $pdo->prepare("INSERT INTO products 
+        (sku,name,description,category,unit,expiration_date,min_qty,max_qty,warehouse_id) 
+        VALUES (?,?,?,?,?,?,?,?,?)");
+    $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id]);
+
+    $newId = $pdo->lastInsertId();
+
+    // Assign warehouse in product_locations table if selected
+    if ($warehouse_id) {
+        $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity) 
+                       VALUES (?, ?, 0)")
+            ->execute([$newId, $warehouse_id]);
+    }
+}
+
+
         header("Location: index.php?status=success");
         exit;
     } catch (Exception $e) {
@@ -38,16 +61,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------- Load list ----------
 $search = $_GET['q'] ?? '';
 $params = [];
-$sql = "SELECT p.*, (SELECT SUM(pl.quantity) FROM product_locations pl WHERE pl.product_id = p.id) AS total_qty 
-        FROM products p WHERE 1 ";
+$sql = "SELECT p.*, 
+        l.name AS warehouse_name,
+        COALESCE((SELECT SUM(pl.quantity) FROM product_locations pl WHERE pl.product_id = p.id),0) AS total_qty
+        FROM products p
+        LEFT JOIN locations l ON p.warehouse_id = l.id
+        WHERE 1";
+
 if ($search) { 
     $sql .= " AND (p.name LIKE :s OR p.sku LIKE :s OR p.category LIKE :s)"; 
     $params[':s']="%$search%"; 
 }
+
 $sql .= " ORDER BY p.id DESC";
-$stmt=$pdo->prepare($sql); 
+$stmt = $pdo->prepare($sql); 
 $stmt->execute($params);
-$items=$stmt->fetchAll(PDO::FETCH_ASSOC);
+$items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// ---------- Load Warehouses ----------
+$warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
 <html>
@@ -65,6 +97,8 @@ $items=$stmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 <body>
 
+<?php include 'sidebar.php'; ?>
+
 <?php if (isset($_GET['status'])): ?>
 <script>
   <?php if ($_GET['status'] === 'success'): ?>
@@ -79,9 +113,6 @@ $items=$stmt->fetchAll(PDO::FETCH_ASSOC);
   <div class="header">
     <h1>Product Inventory</h1>
     <div>
-      <a class="btn" href="locations.php">Manage Locations</a>
-      <a class="btn" href="transactions.php">Transactions</a>
-      <a class="btn" href="alerts.php">Alerts & Reports</a>
       <button class="btn btn-primary" onclick="openAddModal()">+ Add Item</button>
     </div>
   </div>
@@ -94,7 +125,10 @@ $items=$stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <table class="table">
       <thead>
-        <tr><th>SKU</th><th>Name</th><th>Category</th><th>Unit</th><th>Total Qty</th><th>Min / Max</th><th>Expiration</th><th>Actions</th></tr>
+        <tr>
+          <th>SKU</th><th>Name</th><th>Category</th><th>Unit</th>
+          <th>Total Qty</th><th>Min / Max</th><th>Expiration</th><th>Warehouse</th><th>Actions</th>
+        </tr>
       </thead>
       <tbody>
         <?php foreach($items as $it): ?>
@@ -106,16 +140,21 @@ $items=$stmt->fetchAll(PDO::FETCH_ASSOC);
             <td><?php echo (int)$it['total_qty'] ?></td>
             <td><?php echo (int)$it['min_qty'] ?> / <?php echo (int)$it['max_qty'] ?></td>
             <td class="small"><?php echo $it['expiration_date'] ?: '-' ?></td>
+            <td>
+              <?php 
+                $wh = array_filter($warehouses, fn($w) => $w['id'] == $it['warehouse_id']);
+                echo htmlspecialchars($it['warehouse_name'] ?: '-');
+              ?>
+            </td>
             <td class="actions">
-              <button class="btn" onclick="openEditModal(<?php echo htmlspecialchars(json_encode($it)) ?>);return false;">Edit</button>
-              <a class="btn" href="stock_transaction.php?action=stock-in&id=<?php echo $it['id'] ?>">Stock-in</a>
-              <a class="btn" href="stock_transaction.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-out</a>
-              <a class="btn" href="stock_transaction.php?action=transfer&id=<?php echo $it['id'] ?>">Transfer</a>
-              <a class="btn" href="Module1/delete_item.php?id=<?php echo $it['id'] ?>" onclick="return confirm('Delete item?')">Delete</a>
+              <button class="btn" onclick='openEditModal(<?php echo json_encode($it) ?>);return false;'>Edit</button>
+              <a class="btn" href="stock_in.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-in</a>
+              <a class="btn" href="stock_out.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-out</a>
+              <a class="btn" href="delete_item.php?id=<?php echo $it['id'] ?>" onclick="return confirm('Delete item?')">Delete</a>
             </td>
           </tr>
         <?php endforeach; if(!count($items)): ?>
-          <tr><td colspan="8" class="small">No items found.</td></tr>
+          <tr><td colspan="9" class="small">No items found.</td></tr>
         <?php endif; ?>
       </tbody>
     </table>
@@ -148,6 +187,16 @@ $items=$stmt->fetchAll(PDO::FETCH_ASSOC);
         <label>Description<textarea class="input" name="description" id="item_desc"></textarea></label>
       </div>
       <div class="form-row">
+        <label>Warehouse
+          <select class="input" name="warehouse_id" id="item_warehouse">
+            <option value="">-- Select Warehouse --</option>
+            <?php foreach($warehouses as $w): ?>
+              <option value="<?php echo $w['id'] ?>"><?php echo htmlspecialchars($w['code']." - ".$w['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+      </div>
+      <div class="form-row">
         <button class="btn btn-primary" type="submit">Save</button>
         <button class="btn" type="button" onclick="closeModal()">Cancel</button>
       </div>
@@ -155,13 +204,39 @@ $items=$stmt->fetchAll(PDO::FETCH_ASSOC);
   </div>
 </div>
 
+<!-- Stock-In Modal -->
+<div class="modal" id="stockInModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="stockInTitle">Stock-In Product</h2>
+      <span class="close" onclick="closeStockInModal()">&times;</span>
+    </div>
+    <form method="post" id="stockInForm">
+      <input type="hidden" name="product_id" id="stockInProductId">
+      <p><strong>Product:</strong> <span id="stockInProductName"></span></p>
+      <p><strong>Warehouse:</strong> <span id="stockInWarehouse"></span></p>
+      <p><strong>Current Quantity:</strong> <span id="stockInCurrentQty"></span></p>
+
+      <label>
+        Quantity to Add:
+        <input type="number" name="quantity" value="0" min="1" required>
+      </label>
+      <br><br>
+      <button class="btn btn-primary" type="submit">Stock In</button>
+      <button class="btn" type="button" onclick="closeStockInModal()">Cancel</button>
+    </form>
+  </div>
+</div>
+
 <script>
+
 function openAddModal(){
   document.getElementById('modalTitle').innerText = "Add Item";
   document.getElementById('itemForm').reset();
   document.getElementById('item_id').value = "";
   document.getElementById('itemModal').style.display='flex';
 }
+
 function openEditModal(item){
   document.getElementById('modalTitle').innerText = "Edit Item";
   document.getElementById('item_id').value = item.id;
@@ -173,8 +248,14 @@ function openEditModal(item){
   document.getElementById('item_min').value = item.min_qty;
   document.getElementById('item_max').value = item.max_qty;
   document.getElementById('item_desc').value = item.description;
+
+  // Preselect warehouse
+  const whSelect = document.getElementById('item_warehouse');
+  whSelect.value = item.warehouse_id || "";
+
   document.getElementById('itemModal').style.display='flex';
 }
+
 function closeModal(){
   document.getElementById('itemModal').style.display='none';
 }
