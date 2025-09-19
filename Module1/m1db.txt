@@ -1,0 +1,67 @@
+-- create database
+CREATE DATABASE IF NOT EXISTS coffee_erp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE coffee_erp;
+
+-- warehouses table
+CREATE TABLE warehouses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- inventory items
+CREATE TABLE items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sku VARCHAR(50) UNIQUE NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  description TEXT,
+  category VARCHAR(100),
+  unit VARCHAR(30) DEFAULT 'pcs',
+  min_threshold INT DEFAULT 0,
+  max_threshold INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- inventory quantities per warehouse/location
+CREATE TABLE item_stocks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id INT NOT NULL,
+  warehouse_id INT NOT NULL,
+  quantity INT DEFAULT 0,
+  expiry_date DATE NULL,
+  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY item_warehouse_unique (item_id, warehouse_id),
+  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+  FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE
+);
+
+-- stock transactions log (in/out/transfer)
+CREATE TABLE stock_transactions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id INT NOT NULL,
+  warehouse_from INT NULL,
+  warehouse_to INT NULL,
+  type ENUM('stock_in','stock_out','transfer') NOT NULL,
+  quantity INT NOT NULL,
+  reference VARCHAR(150),
+  expiry_date DATE NULL,
+  created_by VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+  FOREIGN KEY (warehouse_from) REFERENCES warehouses(id),
+  FOREIGN KEY (warehouse_to) REFERENCES warehouses(id)
+);
+
+-- optional: re-order requests table (generated when below min)
+CREATE TABLE reorder_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  item_id INT NOT NULL,
+  warehouse_id INT NOT NULL,
+  quantity INT NOT NULL,
+  status ENUM('open','ordered','closed') DEFAULT 'open',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (item_id) REFERENCES items(id),
+  FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+);
