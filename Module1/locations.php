@@ -48,7 +48,7 @@ foreach ($allProducts as $p) {
 <meta charset="utf-8">
 <title>Locations</title>
 <link rel="stylesheet" href="sidebar.css">
-<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="styles.css">
 <style>
 /* Modal Styles */
 .modal {
@@ -93,13 +93,13 @@ foreach ($allProducts as $p) {
     <h1>Locations</h1>
     <div>
       <input id="filterInput" class="input" style="max-width:200px" placeholder="Filter locations...">
-      <button class="btn btn-primary" id="openModal">+ Add Location</button>
+      <button class="btn btn-primary" id="openModal">+ Add Warehouse</button>
       <a class="btn" href="index.php">Back</a>
     </div>
   </div>
 
   <div class="card">
-    <h3>Existing Locations</h3>
+    <h3>Existing Warehouse</h3>
     <table class="table" id="locationsTable">
       <thead>
         <tr>
@@ -147,7 +147,7 @@ foreach ($allProducts as $p) {
 <div class="modal" id="locationModal">
   <div class="modal-content">
     <span class="modal-close" id="closeModal">&times;</span>
-    <h3>Add Location</h3>
+    <h3>Add Warehouse</h3>
     <form method="post">
       <input type="hidden" name="action" value="add">
       <div class="form-row">

@@ -49,7 +49,7 @@ function is_active($names) {
         <a href="index.php" class="block px-2 py-1 rounded <?php echo is_active('index.php') ? 'bg-red-600 text-white' : 'hover:bg-gray-200'; ?>">Product Item</a>
 
         <a href="locations.php" class="block px-2 py-1 rounded <?php echo is_active('locations.php') ? 'bg-red-600 text-white' : 'hover:bg-gray-200'; ?>">
-          Manage Locations
+          Manage Warehouse
         </a>
 
         <a href="transactions.php" class="block px-2 py-1 rounded <?php echo is_active('transactions.php') ? 'bg-red-600 text-white' : 'hover:bg-gray-200'; ?>">

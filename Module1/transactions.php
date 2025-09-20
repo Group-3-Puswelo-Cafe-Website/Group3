@@ -1,5 +1,7 @@
 <?php
 require '../db.php';
+
+
 $filter = $_GET['filter'] ?? '';
 $sql = "SELECT t.*, p.sku, p.name AS product_name,
     lf.code AS from_code, lt.code AS to_code
@@ -8,6 +10,7 @@ $sql = "SELECT t.*, p.sku, p.name AS product_name,
     LEFT JOIN locations lf ON lf.id = t.location_from
     LEFT JOIN locations lt ON lt.id = t.location_to
     WHERE 1 ";
+
 $params = [];
 if ($filter) {
     $sql .= " AND (t.type = :f OR p.sku LIKE :f2 OR p.name LIKE :f2) ";
@@ -19,8 +22,20 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
-<!doctype html><html><head><meta charset="utf-8"><title>Transactions</title><link rel="stylesheet" href="../styles.css"></head><body>
+
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Transactions</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+
   <?php include 'sidebar.php'; ?>
+
+
 <div class="container">
   <div class="header"><h1>Transactions</h1><div><a class="btn" href="index.php">Back</a></div></div>
   <div class="card">
@@ -46,4 +61,5 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </table>
   </div>
 </div>
-</body></html>
+</body>
+</html>

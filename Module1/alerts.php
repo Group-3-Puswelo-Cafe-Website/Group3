@@ -25,7 +25,7 @@ $expiring = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <html>
     <head><meta charset="utf-8">
     <title>Alerts & Reports</title>
-    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <?php include 'sidebar.php'; ?>
