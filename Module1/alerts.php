@@ -90,7 +90,7 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
   </div>
 </div>
 <div class="container">
-  <div class="header"><h1>Transactions</h1><div><a class="btn" href="index.php">Back</a></div></div>
+  <div class="header"><h1>Transactions</h1></div>
   <div class="card">
     <form method="get" class="form-row">
       <input class="input" name="filter" placeholder="Filter by type sku or name" value="<?php echo htmlspecialchars($filter) ?>">
