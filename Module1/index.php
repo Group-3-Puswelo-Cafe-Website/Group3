@@ -1,88 +1,9 @@
 <?php
 require '../db.php';
-
-// ---------- Handle Add / Update ----------
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id = $_POST['id'] ?? null;
-    $sku = $_POST['sku'];
-    $name = $_POST['name'];
-    $desc = $_POST['description'];
-    $category = $_POST['category'];
-    $unit = $_POST['unit'] ?: 'pcs';
-    $expiration_date = $_POST['expiration_date'] ?: null;
-    $min_qty = (int)($_POST['min_qty'] ?? 0);
-    $max_qty = (int)($_POST['max_qty'] ?? 0);
-    $warehouse_id = $_POST['warehouse_id'] ?? null;
-
-    try {
-        if ($id) {
-    // Update product including warehouse_id
-    $stmt = $pdo->prepare("UPDATE products 
-        SET sku=?, name=?, description=?, category=?, unit=?, expiration_date=?, min_qty=?, max_qty=?, warehouse_id=? 
-        WHERE id=?");
-    $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id, $id]);
-
-    // Update product_locations table if warehouse selected
-    if ($warehouse_id) {
-        $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity)
-                       VALUES (?, ?, 0)
-                       ON DUPLICATE KEY UPDATE location_id=VALUES(location_id)")
-            ->execute([$id, $warehouse_id]);
-    } else {
-        // Remove warehouse mapping if deselected
-        $pdo->prepare("DELETE FROM product_locations WHERE product_id=?")->execute([$id]);
-    }
-} else {
-    // Add new product including warehouse_id
-    $stmt = $pdo->prepare("INSERT INTO products 
-        (sku,name,description,category,unit,expiration_date,min_qty,max_qty,warehouse_id) 
-        VALUES (?,?,?,?,?,?,?,?,?)");
-    $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id]);
-
-    $newId = $pdo->lastInsertId();
-
-    // Assign warehouse in product_locations table if selected
-    if ($warehouse_id) {
-        $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity) 
-                       VALUES (?, ?, 0)")
-            ->execute([$newId, $warehouse_id]);
-    }
-}
-
-
-        header("Location: index.php?status=success");
-        exit;
-    } catch (Exception $e) {
-        header("Location: index.php?status=error");
-        exit;
-    }
-}
-
-
-
-// ---------- Load list ----------
-$search = $_GET['q'] ?? '';
-$params = [];
-$sql = "SELECT p.*, 
-        l.name AS warehouse_name,
-        COALESCE((SELECT SUM(pl.quantity) FROM product_locations pl WHERE pl.product_id = p.id),0) AS total_qty
-        FROM products p
-        LEFT JOIN locations l ON p.warehouse_id = l.id
-        WHERE 1";
-
-if ($search) { 
-    $sql .= " AND (p.name LIKE :s OR p.sku LIKE :s OR p.category LIKE :s)"; 
-    $params[':s']="%$search%"; 
-}
-
-$sql .= " ORDER BY p.id DESC";
-$stmt = $pdo->prepare($sql); 
-$stmt->execute($params);
-$items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// ---------- Load Warehouses ----------
-$warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+require 'add.php';
+require 'load.php';
 ?>
+
 <!doctype html>
 <html>
 <head>
@@ -101,15 +22,7 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
 
 <?php include 'sidebar.php'; ?>
 
-<?php if (isset($_GET['status'])): ?>
-<script>
-  <?php if ($_GET['status'] === 'success'): ?>
-    alert("Item saved successfully!");
-  <?php elseif ($_GET['status'] === 'error'): ?>
-    alert("Failed to save item. Please try again.");
-  <?php endif; ?>
-</script>
-<?php endif; ?>
+<?php require 'status.php'; ?>
 
 <div class="container">
   <div class="header">
