@@ -58,6 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+
+
 // ---------- Load list ----------
 $search = $_GET['q'] ?? '';
 $params = [];
@@ -150,6 +152,7 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
               <button class="btn" onclick='openEditModal(<?php echo json_encode($it) ?>);return false;'>Edit</button>
               <a class="btn" href="stock_in.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-in</a>
               <a class="btn" href="stock_out.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-out</a>
+              <a class="btn" href="#" onclick='openTransferModal(<?php echo json_encode($it) ?>); return false;'>Transfer</a>
               <a class="btn" href="delete_item.php?id=<?php echo $it['id'] ?>" onclick="return confirm('Delete item?')">Delete</a>
             </td>
           </tr>
@@ -228,6 +231,44 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
   </div>
 </div>
 
+<!-- Transfer Modal -->
+<div class="modal" id="transferModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Transfer Product</h2>
+      <span class="close" onclick="closeTransferModal()">&times;</span>
+    </div>
+    <form method="post" action="transfer_handler.php">
+      <input type="hidden" name="product_id" id="transferProductId">
+      <input type="hidden" name="from_warehouse_id" id="transferFromWarehouseId">
+
+      <p><strong>Product:</strong> <span id="transferProductName"></span></p>
+      <p><strong>Current Warehouse:</strong> <span id="transferFromWarehouseName"></span></p>
+
+      <label>Target Warehouse:
+        <select name="to_warehouse_id" class="input" required>
+          <option value="">-- Select Target --</option>
+          <?php foreach($warehouses as $w): ?>
+            <option value="<?php echo $w['id'] ?>"><?php echo htmlspecialchars($w['code']." - ".$w['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label><br><br>
+
+      <label>Quantity:
+        <input type="number" name="quantity" min="1" class="input" required>
+      </label><br><br>
+
+      <label>Note:
+        <input type="text" name="note" class="input">
+      </label><br><br>
+
+      <button class="btn btn-primary" type="submit">Transfer</button>
+      <button class="btn" type="button" onclick="closeTransferModal()">Cancel</button>
+    </form>
+  </div>
+</div>
+
+
 <script>
 
 function openAddModal(){
@@ -262,6 +303,36 @@ function closeModal(){
 window.onclick=function(e){
   if(e.target==document.getElementById('itemModal')){closeModal();}
 }
+
+function openTransferModal(item) {
+  document.getElementById('transferProductId').value = item.id;
+  document.getElementById('transferFromWarehouseId').value = item.warehouse_id || '';
+  document.getElementById('transferProductName').innerText = item.name;
+  document.getElementById('transferFromWarehouseName').innerText = item.warehouse_name || '-';
+  document.getElementById('transferModal').style.display = 'flex';
+}
+
+function closeTransferModal() {
+  document.getElementById('transferModal').style.display = 'none';
+}
+
+window.onclick = function(e) {
+  if (e.target === document.getElementById('transferModal')) {
+    closeTransferModal();
+  }
+}
+
 </script>
 </body>
 </html>
+<?php if (isset($_GET['status'])): ?>
+<script>
+  <?php if ($_GET['status'] === 'transfer_success'): ?>
+    alert("Transfer completed successfully.");
+  <?php elseif ($_GET['status'] === 'transfer_error'): ?>
+    alert("Transfer failed. Please check quantity or try again.");
+  <?php elseif ($_GET['status'] === 'error_same_warehouse'): ?>
+    alert("Cannot transfer to the same warehouse.");
+  <?php endif; ?>
+</script>
+<?php endif; ?>

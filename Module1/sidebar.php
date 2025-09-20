@@ -52,10 +52,6 @@ function is_active($names) {
           Manage Warehouse
         </a>
 
-        <a href="transactions.php" class="block px-2 py-1 rounded <?php echo is_active('transactions.php') ? 'bg-red-600 text-white' : 'hover:bg-gray-200'; ?>">
-          Transactions
-        </a>
-
         <a href="Alerts.php" class="block px-2 py-1 rounded <?php echo is_active('alerts.php') ? 'bg-red-600 text-white' : 'hover:bg-gray-200'; ?>">
           Alerts & Reports
         </a>
