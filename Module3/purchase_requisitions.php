@@ -117,10 +117,10 @@ $requisitions = $pdo->query("
         }
         .modal-content {
             background: #fff;
-            padding: 20px;
+            padding: 25px;
             border-radius: 8px;
             width: 100%;
-            max-width: 600px;
+            max-width: 700px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             position: relative;
             max-height: 90vh;
@@ -130,13 +130,21 @@ $requisitions = $pdo->query("
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
             border-bottom: 1px solid #eee;
+        }
+        .modal-header h2 {
+            margin: 0;
+            color: #2c3e50;
         }
         .close {
             cursor: pointer;
             font-size: 24px;
+            color: #999;
+        }
+        .close:hover {
+            color: #333;
         }
         .item-row {
             display: flex;
@@ -171,29 +179,109 @@ $requisitions = $pdo->query("
         .btn-danger:hover {
             background-color: #c0392b;
         }
-        .items-preview {
+        .req-details {
             background: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 10px;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
         }
-        .items-preview h4 {
-            margin: 0 0 15px 0;
-            font-size: 16px;
+        .req-details h3 {
+            margin-top: 0;
+            color: #2c3e50;
             border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
+            padding-bottom: 10px;
         }
-        .items-preview ul {
+        .detail-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .detail-label {
+            font-weight: bold;
+            width: 150px;
+            color: #555;
+        }
+        .detail-value {
+            flex: 1;
+        }
+        .items-section {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .items-header {
+            background: #34495e;
+            color: white;
+            padding: 12px 15px;
+            font-weight: bold;
+        }
+        .items-list {
+            padding: 0;
             margin: 0;
-            padding-left: 20px;
+            list-style: none;
         }
-        .items-preview li {
-            margin-bottom: 8px;
+        .items-list li {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .items-list li:last-child {
+            border-bottom: none;
+        }
+        .item-info {
+            flex: 1;
+        }
+        .item-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .item-meta {
+            color: #666;
             font-size: 14px;
         }
-        .items-preview .item-total {
+        .item-price {
+            text-align: right;
+            min-width: 150px;
+        }
+        .item-unit-price {
+            color: #666;
+            font-size: 14px;
+        }
+        .item-total {
             font-weight: bold;
             color: #2c3e50;
+            font-size: 16px;
+        }
+        .total-section {
+            background: #ecf0f1;
+            padding: 15px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 18px;
+            color: #2c3e50;
+            border-top: 1px solid #ddd;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-approved {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-rejected {
+            background: #f8d7da;
+            color: #721c24;
         }
     </style>
 </head>
@@ -202,7 +290,7 @@ $requisitions = $pdo->query("
 
     <div class="container" style="margin-left: 18rem;">
         <div class="header">
-            <h1>//Purchase Requisitions</h1>
+            <h1>Purchase Requisitions</h1>
             <div>
                 <button class="btn btn-primary" onclick="openAddModal()">+ New Requisition</button>
             </div>
@@ -252,9 +340,7 @@ $requisitions = $pdo->query("
                             <td><?php echo htmlspecialchars($req['requested_by']); ?></td>
                             <td><?php echo htmlspecialchars(substr($req['description'], 0, 50) . '...'); ?></td>
                             <td>
-                                <span class="badge <?php 
-                                    echo $req['status'] == 'approved' ? 'badge-success' : 'badge-warning'; 
-                                ?>">
+                                <span class="status-badge status-<?php echo strtolower($req['status']); ?>">
                                     <?php echo ucfirst(htmlspecialchars($req['status'])); ?>
                                 </span>
                             </td>
@@ -379,22 +465,87 @@ $requisitions = $pdo->query("
                         return;
                     }
                     
-                    let itemsHtml = '<div class="items-preview"><h4>Items:</h4><ul>';
+                    const req = data.requisition;
+                    
+                    // Build requisition details HTML
+                    let detailsHtml = `
+                        <div class="req-details">
+                            <h3>Requisition Information</h3>
+                            <div class="detail-row">
+                                <div class="detail-label">Requisition No.:</div>
+                                <div class="detail-value">${req.requisition_number}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Requested By:</div>
+                                <div class="detail-value">${req.requested_by}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Request Date:</div>
+                                <div class="detail-value">${new Date(req.request_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Status:</div>
+                                <div class="detail-value">
+                                    <span class="status-badge status-${req.status.toLowerCase()}">${req.status.charAt(0).toUpperCase() + req.status.slice(1)}</span>
+                                </div>
+                            </div>
+                            ${req.approved_by ? `
+                                <div class="detail-row">
+                                    <div class="detail-label">Approved By:</div>
+                                    <div class="detail-value">${req.approved_by}</div>
+                                </div>
+                                <div class="detail-row">
+                                    <div class="detail-label">Approval Date:</div>
+                                    <div class="detail-value">${new Date(req.approval_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                                </div>
+                            ` : ''}
+                            <div class="detail-row">
+                                <div class="detail-label">Description:</div>
+                                <div class="detail-value">${req.description}</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Build items list HTML
+                    let itemsHtml = `
+                        <div class="items-section">
+                            <div class="items-header">Items Requested</div>
+                            <ul class="items-list">
+                    `;
+                    
                     let totalAmount = 0;
                     
                     if (data.items && data.items.length > 0) {
                         data.items.forEach(item => {
                             const itemTotal = item.quantity * item.estimated_unit_price;
                             totalAmount += itemTotal;
-                            itemsHtml += `<li>${item.quantity} ${item.unit || 'pcs'} - ${item.product_name} (Unit Price: $${item.estimated_unit_price}) - <span class="item-total">$${itemTotal.toFixed(2)}</span></li>`;
+                            
+                            itemsHtml += `
+                                <li>
+                                    <div class="item-info">
+                                        <div class="item-name">${item.product_name}</div>
+                                        <div class="item-meta">${item.quantity} ${item.unit || 'pcs'}</div>
+                                    </div>
+                                    <div class="item-price">
+                                        <div class="item-unit-price">₱${parseFloat(item.estimated_unit_price).toFixed(2)} each</div>
+                                        <div class="item-total">₱${itemTotal.toFixed(2)}</div>
+                                    </div>
+                                </li>
+                            `;
                         });
                     } else {
-                        itemsHtml += '<li>No items</li>';
+                        itemsHtml += '<li style="text-align: center; color: #999;">No items found</li>';
                     }
                     
-                    itemsHtml += `</ul><div style="text-align: right; margin-top: 15px; font-weight: bold;">Total: $${totalAmount.toFixed(2)}</div></div>`;
+                    itemsHtml += `
+                            </ul>
+                            <div class="total-section">
+                                Total Amount: ₱${totalAmount.toFixed(2)}
+                            </div>
+                        </div>
+                    `;
                     
-                    document.getElementById('viewContent').innerHTML = itemsHtml;
+                    document.getElementById('viewContent').innerHTML = detailsHtml + itemsHtml;
                     document.getElementById('viewModal').style.display = 'flex';
                 })
                 .catch(error => {
