@@ -202,7 +202,7 @@ $requisitions = $pdo->query("
 
     <div class="container" style="margin-left: 18rem;">
         <div class="header">
-            <h1>Purchase Requisitions</h1>
+            <h1>//Purchase Requisitions</h1>
             <div>
                 <button class="btn btn-primary" onclick="openAddModal()">+ New Requisition</button>
             </div>
