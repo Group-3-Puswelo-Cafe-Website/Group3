@@ -1,25 +1,30 @@
 <?php
-// db.php
-// Adjust these values to match your local environment
-$host = 'localhost';
-$db= 'coffee';
-$user = 'root';
-$pass = '';
+require '../db.php';
+require '../shared/config.php';
+
+$product_id = $_GET['id'] ?? null;
+if (!$product_id) {
+    header('Location: ' . BASE_URL . 'Module1/index.php');
+    exit;
+}
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    ]);
+    $pdo->beginTransaction();
+    
+    // Delete from product_locations
+    $pdo->prepare("DELETE FROM product_locations WHERE product_id = ?")->execute([$product_id]);
+    
+    // Delete from stock_transactions
+    $pdo->prepare("DELETE FROM stock_transactions WHERE product_id = ?")->execute([$product_id]);
+    
+    // Delete the product
+    $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([$product_id]);
+    
+    $pdo->commit();
+    header('Location: ' . BASE_URL . 'Module1/index.php?status=success');
 } catch (Exception $e) {
-    die("Database connection failed: " . $e->getMessage());
+    $pdo->rollBack();
+    header('Location: ' . BASE_URL . 'Module1/index.php?status=error');
 }
-
-$id = (int)($_GET['id'] ?? 0);
-if ($id) {
-    $pdo->prepare("DELETE FROM products WHERE id=?")->execute([$id]);
-}
+exit;
 ?>
-<script>
-alert("Deleted successfully!");
-window.location.href = 'index.php';
-</script>

@@ -1,5 +1,6 @@
 <?php
 require '../db.php';
+require '../shared/config.php'; // Add shared configuration
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'add') {
@@ -12,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("DELETE FROM locations WHERE id=?")
             ->execute([(int)$_POST['id']]);
     }
-    header('Location: ../locations.php');
+    header('Location: locations.php'); // Update to current file
     exit;
 }
 
@@ -41,60 +42,59 @@ foreach ($allProducts as $p) {
 }
 ?>
 
-
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Locations</title>
-<link rel="stylesheet" href="sidebar.css">
-<link rel="stylesheet" href="styles.css">
-<style>
-/* Modal Styles */
-.modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-}
-.modal-content {
-  background: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  width: 100%;
-  max-width: 500px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  position: relative;
-}
-.modal-close {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  cursor: pointer;
-  font-size: 18px;
-  font-weight: bold;
-  color: #666;
-}
-.products-list {
-  font-size: 0.9em;
-  margin: 5px 0 0 0;
-  padding-left: 15px;
-}
-</style>
+    <meta charset="utf-8">
+    <title>Locations</title>
+    <link rel="stylesheet" href="styles.css">
+    <base href="<?php echo BASE_URL; ?>"> <!-- Add base tag for path resolution -->
+    <style>
+        /* Modal Styles */
+        .modal {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          justify-content: center;
+          align-items: center;
+          z-index: 100;
+        }
+        .modal-content {
+          background: #fff;
+          padding: 20px;
+          border-radius: 8px;
+          width: 100%;
+          max-width: 500px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          position: relative;
+        }
+        .modal-close {
+          position: absolute;
+          top: 8px;
+          right: 10px;
+          cursor: pointer;
+          font-size: 18px;
+          font-weight: bold;
+          color: #666;
+        }
+        .products-list {
+          font-size: 0.9em;
+          margin: 5px 0 0 0;
+          padding-left: 15px;
+        }
+    </style>
 </head>
 <body>
-  <?php include 'sidebar.php'; ?>
+  <?php include '../shared/sidebar.php'; ?> <!-- Updated path to shared sidebar -->
 
-<div class="container">
+<div class="container" style="margin-left: 18rem;"> <!-- Add left margin for sidebar -->
   <div class="header">
     <h1>Locations</h1>
     <div>
       <input id="filterInput" class="input" style="max-width:200px" placeholder="Filter locations...">
       <button class="btn btn-primary" id="openModal">+ Add Warehouse</button>
-      <a class="btn" href="index.php">Back</a>
+      <a class="btn" href="<?php echo BASE_URL; ?>Module1/index.php">Back</a> <!-- Update path -->
     </div>
   </div>
 

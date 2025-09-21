@@ -1,5 +1,6 @@
 <?php
 require '../db.php';
+require '../shared/config.php';
 
 // ---------- Handle Add / Update ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -12,53 +13,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expiration_date = $_POST['expiration_date'] ?: null;
     $min_qty = (int)($_POST['min_qty'] ?? 0);
     $max_qty = (int)($_POST['max_qty'] ?? 0);
+    
+    // Fix: Properly handle warehouse_id - convert empty string to null
     $warehouse_id = $_POST['warehouse_id'] ?? null;
+    if ($warehouse_id === '') {
+        $warehouse_id = null;
+    } else {
+        $warehouse_id = (int)$warehouse_id;
+    }
 
     try {
         if ($id) {
-    // Update product including warehouse_id
-    $stmt = $pdo->prepare("UPDATE products 
-        SET sku=?, name=?, description=?, category=?, unit=?, expiration_date=?, min_qty=?, max_qty=?, warehouse_id=? 
-        WHERE id=?");
-    $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id, $id]);
+            // Update product including warehouse_id
+            $stmt = $pdo->prepare("UPDATE products 
+                SET sku=?, name=?, description=?, category=?, unit=?, expiration_date=?, min_qty=?, max_qty=?, warehouse_id=? 
+                WHERE id=?");
+            $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id, $id]);
 
-    // Update product_locations table if warehouse selected
-    if ($warehouse_id) {
-        $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity)
-                       VALUES (?, ?, 0)
-                       ON DUPLICATE KEY UPDATE location_id=VALUES(location_id)")
-            ->execute([$id, $warehouse_id]);
-    } else {
-        // Remove warehouse mapping if deselected
-        $pdo->prepare("DELETE FROM product_locations WHERE product_id=?")->execute([$id]);
-    }
-} else {
-    // Add new product including warehouse_id
-    $stmt = $pdo->prepare("INSERT INTO products 
-        (sku,name,description,category,unit,expiration_date,min_qty,max_qty,warehouse_id) 
-        VALUES (?,?,?,?,?,?,?,?,?)");
-    $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id]);
+            // Fix: Delete existing location assignments first
+            $pdo->prepare("DELETE FROM product_locations WHERE product_id=?")->execute([$id]);
+            
+            // Add new location assignment if warehouse selected
+            if ($warehouse_id) {
+                $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity)
+                               VALUES (?, ?, 0)")
+                    ->execute([$id, $warehouse_id]);
+            }
+        } else {
+            // Add new product including warehouse_id
+            $stmt = $pdo->prepare("INSERT INTO products 
+                (sku,name,description,category,unit,expiration_date,min_qty,max_qty,warehouse_id) 
+                VALUES (?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$sku, $name, $desc, $category, $unit, $expiration_date, $min_qty, $max_qty, $warehouse_id]);
 
-    $newId = $pdo->lastInsertId();
+            $newId = $pdo->lastInsertId();
 
-    // Assign warehouse in product_locations table if selected
-    if ($warehouse_id) {
-        $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity) 
-                       VALUES (?, ?, 0)")
-            ->execute([$newId, $warehouse_id]);
-    }
-}
-
+            // Assign warehouse in product_locations table if selected
+            if ($warehouse_id) {
+                $pdo->prepare("INSERT INTO product_locations (product_id, location_id, quantity) 
+                               VALUES (?, ?, 0)")
+                    ->execute([$newId, $warehouse_id]);
+            }
+        }
 
         header("Location: index.php?status=success");
         exit;
     } catch (Exception $e) {
-        header("Location: index.php?status=error");
+        // For debugging - show the actual error
+        echo "<div style='color:red; padding:20px; border:1px solid red;'>";
+        echo "<h3>Error:</h3>";
+        echo "<p>" . $e->getMessage() . "</p>";
+        echo "<p>File: " . $e->getFile() . "</p>";
+        echo "<p>Line: " . $e->getLine() . "</p>";
+        echo "</div>";
         exit;
     }
 }
-
-
 
 // ---------- Load list ----------
 $search = $_GET['q'] ?? '';
@@ -89,17 +99,44 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
   <meta charset="utf-8">
   <title>Product Item Inventory</title>
   <link rel="stylesheet" href="styles.css">
+  <base href="<?php echo BASE_URL; ?>">
+  
+  <!-- Add Modal CSS -->
   <style>
-    /* Modal styling */
-    .modal {display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;}
-    .modal-content {background:#fff;padding:20px;border-radius:8px;max-width:600px;width:100%;position:relative;}
-    .modal-header {display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-    .close {cursor:pointer;font-size:20px;}
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    .modal-content {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      position: relative;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .close {
+      cursor: pointer;
+      font-size: 20px;
+    }
   </style>
 </head>
 <body>
 
-<?php include 'sidebar.php'; ?>
+<?php include '../shared/sidebar.php'; ?>
 
 <?php if (isset($_GET['status'])): ?>
 <script>
@@ -111,7 +148,7 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
 </script>
 <?php endif; ?>
 
-<div class="container">
+<div class="container" style="margin-left: 18rem;">
   <div class="header">
     <h1>Product Inventory</h1>
     <div>
@@ -150,10 +187,10 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
             </td>
             <td class="actions">
               <button class="btn" onclick='openEditModal(<?php echo json_encode($it) ?>);return false;'>Edit</button>
-              <a class="btn" href="stock_in.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-in</a>
-              <a class="btn" href="stock_out.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-out</a>
+              <a class="btn" href="<?php echo BASE_URL; ?>Module1/stock_in.php?action=stock-in&id=<?php echo $it['id'] ?>">Stock-in</a>
+              <a class="btn" href="<?php echo BASE_URL; ?>Module1/stock_out.php?action=stock-out&id=<?php echo $it['id'] ?>">Stock-out</a>
               <a class="btn" href="#" onclick='openTransferModal(<?php echo json_encode($it) ?>); return false;'>Transfer</a>
-              <a class="btn" href="delete_item.php?id=<?php echo $it['id'] ?>" onclick="return confirm('Delete item?')">Delete</a>
+              <a class="btn" href="<?php echo BASE_URL; ?>Module1/delete_item.php?id=<?php echo $it['id'] ?>" onclick="return confirm('Delete item?')">Delete</a>
             </td>
           </tr>
         <?php endforeach; if(!count($items)): ?>
@@ -238,7 +275,7 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
       <h2>Transfer Product</h2>
       <span class="close" onclick="closeTransferModal()">&times;</span>
     </div>
-    <form method="post" action="transfer_handler.php">
+    <form method="post" action="<?php echo BASE_URL; ?>Module1/transfer_handle.php"> <!-- UPDATED THIS LINE -->
       <input type="hidden" name="product_id" id="transferProductId">
       <input type="hidden" name="from_warehouse_id" id="transferFromWarehouseId">
 
@@ -268,9 +305,7 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
   </div>
 </div>
 
-
 <script>
-
 function openAddModal(){
   document.getElementById('modalTitle').innerText = "Add Item";
   document.getElementById('itemForm').reset();
@@ -300,8 +335,25 @@ function openEditModal(item){
 function closeModal(){
   document.getElementById('itemModal').style.display='none';
 }
-window.onclick=function(e){
-  if(e.target==document.getElementById('itemModal')){closeModal();}
+
+function closeStockInModal() {
+  document.getElementById('stockInModal').style.display = 'none';
+}
+
+function closeTransferModal() {
+  document.getElementById('transferModal').style.display = 'none';
+}
+
+window.onclick = function(e) {
+  if (e.target === document.getElementById('itemModal')) {
+    closeModal();
+  }
+  if (e.target === document.getElementById('stockInModal')) {
+    closeStockInModal();
+  }
+  if (e.target === document.getElementById('transferModal')) {
+    closeTransferModal();
+  }
 }
 
 function openTransferModal(item) {
@@ -311,20 +363,10 @@ function openTransferModal(item) {
   document.getElementById('transferFromWarehouseName').innerText = item.warehouse_name || '-';
   document.getElementById('transferModal').style.display = 'flex';
 }
-
-function closeTransferModal() {
-  document.getElementById('transferModal').style.display = 'none';
-}
-
-window.onclick = function(e) {
-  if (e.target === document.getElementById('transferModal')) {
-    closeTransferModal();
-  }
-}
-
 </script>
 </body>
 </html>
+
 <?php if (isset($_GET['status'])): ?>
 <script>
   <?php if ($_GET['status'] === 'transfer_success'): ?>

@@ -1,5 +1,6 @@
 <?php
 require '../db.php';
+require '../shared/config.php'; // Add shared configuration
 
 // Low stock per product (sum across locations)
 $sql = "SELECT p.id, p.sku, p.name, p.min_qty, p.max_qty, IFNULL(SUM(pl.quantity),0) AS total_qty
@@ -43,76 +44,121 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 <!doctype html>
 <html>
-    <head><meta charset="utf-8">
-    <title>Alerts & Reports</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
+    <head>
+        <meta charset="utf-8">
+        <title>Alerts & Reports</title>
+        <link rel="stylesheet" href="styles.css">
+        <base href="<?php echo BASE_URL; ?>"> <!-- Add base tag for path resolution -->
+    </head>
 <body>
-  <?php include 'sidebar.php'; ?>
-<div class="container">
-  <div class="header"><h1>Alerts & Reports</h1><a class="btn" href="index.php">Back</a></div>
-  <div class="card">
-    <h3>Low Stock (<= Min Quantity)</h3>
-    <?php if (count($low) === 0): ?><div class="small">No low stock items.</div><?php else: ?>
-      <table class="table"><thead><tr><th>SKU</th><th>Name</th><th>Total Qty</th><th>Min</th><th>Suggested Reorder Qty</th></tr></thead><tbody>
-      <?php foreach($low as $l): 
-         $suggest = max( ($l['max_qty'] - $l['total_qty']), 0);
-      ?>
-        <tr>
-          <td><?php echo htmlspecialchars($l['sku'])?></td>
-          <td><?php echo htmlspecialchars($l['name'])?></td>
-          <td><?php echo (int)$l['total_qty']?></td>
-          <td><?php echo (int)$l['min_qty']?></td>
-          <td><?php echo (int)$suggest?> <span class="small"> (max - current)</span></td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody></table>
-    <?php endif; ?>
-  </div>
+  <?php include '../shared/sidebar.php'; ?> <!-- Updated path to shared sidebar -->
+  
+  <div class="container" style="margin-left: 18rem;"> <!-- Add left margin for sidebar -->
+    <div class="header">
+        <h1>Alerts & Reports</h1>
+        <a class="btn" href="<?php echo BASE_URL; ?>Module1/index.php">Back</a> <!-- Update path -->
+    </div>
+    
+    <div class="card">
+        <h3>Low Stock (<= Min Quantity)</h3>
+        <?php if (count($low) === 0): ?>
+            <div class="small">No low stock items.</div>
+        <?php else: ?>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Name</th>
+                        <th>Total Qty</th>
+                        <th>Min</th>
+                        <th>Suggested Reorder Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach($low as $l): 
+                        $suggest = max( ($l['max_qty'] - $l['total_qty']), 0);
+                    ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($l['sku'])?></td>
+                            <td><?php echo htmlspecialchars($l['name'])?></td>
+                            <td><?php echo (int)$l['total_qty']?></td>
+                            <td><?php echo (int)$l['min_qty']?></td>
+                            <td><?php echo (int)$suggest?> <span class="small"> (max - current)</span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
 
-  <div class="card">
-    <h3>Expiring Soon (next 90 days)</h3>
-    <?php if (count($expiring) === 0): ?><div class="small">No items expiring soon.</div><?php else: ?>
-      <table class="table">
-        <thead><tr><th>SKU</th><th>Name</th><th>Expiry Date</th><th>Qty</th></tr></thead>
-        <tbody>
-        <?php foreach($expiring as $e): ?>
-          <tr>
-            <td><?php echo htmlspecialchars($e['sku'])?></td>
-            <td><?php echo htmlspecialchars($e['name'])?></td>
-            <td><?php echo htmlspecialchars($e['expiration_date'])?></td>
-            <td><?php echo (int)$e['total_qty']?></td>
-          </tr>
-        <?php endforeach; ?>
-        </tbody>
-      </table>
-    <?php endif; ?>
+    <div class="card">
+        <h3>Expiring Soon (next 90 days)</h3>
+        <?php if (count($expiring) === 0): ?>
+            <div class="small">No items expiring soon.</div>
+        <?php else: ?>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Name</th>
+                        <th>Expiry Date</th>
+                        <th>Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach($expiring as $e): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($e['sku'])?></td>
+                            <td><?php echo htmlspecialchars($e['name'])?></td>
+                            <td><?php echo htmlspecialchars($e['expiration_date'])?></td>
+                            <td><?php echo (int)$e['total_qty']?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+    
+    <div class="card"> <!-- Added card wrapper for transactions -->
+        <div class="header">
+            <h1>Transactions</h1>
+            <div>
+                <a class="btn" href="<?php echo BASE_URL; ?>Module1/index.php">Back</a> <!-- Update path -->
+            </div>
+        </div>
+        
+        <form method="get" class="form-row">
+            <input class="input" name="filter" placeholder="Filter by type sku or name" value="<?php echo htmlspecialchars($filter) ?>">
+            <button class="btn" type="submit">Filter</button>
+        </form>
+        
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Product</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Qty</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach($logs as $l): ?>
+                    <tr>
+                        <td><?php echo htmlspecialchars($l['trans_date'])?></td>
+                        <td><?php echo htmlspecialchars($l['type'])?></td>
+                        <td><?php echo htmlspecialchars($l['sku'].' — '.$l['product_name'])?></td>
+                        <td><?php echo htmlspecialchars($l['from_code'] ?? '-')?></td>
+                        <td><?php echo htmlspecialchars($l['to_code'] ?? '-')?></td>
+                        <td><?php echo (int)$l['qty']?></td>
+                        <td class="small"><?php echo htmlspecialchars($l['note'])?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
   </div>
-</div>
-<div class="container">
-  <div class="header"><h1>Transactions</h1><div><a class="btn" href="index.php">Back</a></div></div>
-  <div class="card">
-    <form method="get" class="form-row">
-      <input class="input" name="filter" placeholder="Filter by type sku or name" value="<?php echo htmlspecialchars($filter) ?>">
-      <button class="btn" type="submit">Filter</button>
-    </form>
-    <table class="table">
-      <thead><tr><th>Date</th><th>Type</th><th>Product</th><th>From</th><th>To</th><th>Qty</th><th>Note</th></tr></thead>
-      <tbody>
-        <?php foreach($logs as $l): ?>
-          <tr>
-            <td><?php echo htmlspecialchars($l['trans_date'])?></td>
-            <td><?php echo htmlspecialchars($l['type'])?></td>
-            <td><?php echo htmlspecialchars($l['sku'].' — '.$l['product_name'])?></td>
-            <td><?php echo htmlspecialchars($l['from_code'] ?? '-')?></td>
-            <td><?php echo htmlspecialchars($l['to_code'] ?? '-')?></td>
-            <td><?php echo (int)$l['qty']?></td>
-            <td class="small"><?php echo htmlspecialchars($l['note'])?></td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-</div>
 </body>
 </html>
