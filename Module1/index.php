@@ -2,6 +2,53 @@
 require '../db.php';
 require '../shared/config.php';
 
+// Function to get transaction details with PO/GR references
+function getTransactionDetails($transaction) {
+    global $pdo;
+    
+    $details = [];
+    
+    if (!empty($transaction['reference_id']) && !empty($transaction['reference_type'])) {
+        if ($transaction['reference_type'] === 'gr') {
+            // Get goods receipt details
+            $stmt = $pdo->prepare("
+                SELECT gr.receipt_number, gr.po_id, po.po_number
+                FROM goods_receipts gr
+                LEFT JOIN purchase_orders po ON gr.po_id = po.id
+                WHERE gr.id = ?
+            ");
+            $stmt->execute([$transaction['reference_id']]);
+            $gr_data = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($gr_data) {
+                $details['goods_receipt'] = $gr_data['receipt_number'];
+                if ($gr_data['po_number']) {
+                    $details['purchase_order'] = [
+                        'number' => $gr_data['po_number'],
+                        'id' => $gr_data['po_id']
+                    ];
+                }
+            }
+        } elseif ($transaction['reference_type'] === 'po') {
+            // Get purchase order details
+            $stmt = $pdo->prepare("
+                SELECT po_number FROM purchase_orders WHERE id = ?
+            ");
+            $stmt->execute([$transaction['reference_id']]);
+            $po_data = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($po_data) {
+                $details['purchase_order'] = [
+                    'number' => $po_data['po_number'],
+                    'id' => $transaction['reference_id']
+                ];
+            }
+        }
+    }
+    
+    return $details;
+}
+
 // ---------- Handle Add / Update ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = $_POST['id'] ?? null;
@@ -92,6 +139,20 @@ $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ---------- Load Warehouses ----------
 $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+
+// ---------- Load Stock Transactions with References ----------
+$transactions = $pdo->query("
+    SELECT st.*, 
+           p.name as product_name,
+           l_from.name as location_from_name,
+           l_to.name as location_to_name
+    FROM stock_transactions st
+    LEFT JOIN products p ON st.product_id = p.id
+    LEFT JOIN locations l_from ON st.location_from = l_from.id
+    LEFT JOIN locations l_to ON st.location_to = l_to.id
+    ORDER BY st.trans_date DESC
+    LIMIT 50
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
 <html>
@@ -131,6 +192,19 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
     .close {
       cursor: pointer;
       font-size: 20px;
+    }
+    .transaction-section {
+      margin-top: 30px;
+    }
+    .transaction-table {
+      margin-top: 15px;
+    }
+    .reference-link {
+      color: #3498db;
+      text-decoration: none;
+    }
+    .reference-link:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
@@ -196,6 +270,61 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
         <?php endforeach; if(!count($items)): ?>
           <tr><td colspan="9" class="small">No items found.</td></tr>
         <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Stock Transactions Section -->
+  <div class="card transaction-section">
+    <h2>Recent Stock Transactions</h2>
+    <table class="table transaction-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Quantity</th>
+          <th>Type</th>
+          <th>Location</th>
+          <th>Reference</th>
+          <th>Date</th>
+          <th>User</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach($transactions as $trans): ?>
+          <?php $details = getTransactionDetails($trans); ?>
+          <tr>
+            <td><?php echo htmlspecialchars($trans['product_name']) ?></td>
+            <td><?php echo $trans['qty'] ?></td>
+            <td><?php echo ucfirst($trans['type']) ?></td>
+            <td>
+              <?php 
+                if ($trans['location_to']) {
+                    echo htmlspecialchars($trans['location_to_name']);
+                } elseif ($trans['location_from']) {
+                    echo htmlspecialchars($trans['location_from_name']);
+                } else {
+                    echo '-';
+                }
+              ?>
+            </td>
+            <td>
+              <?php if (!empty($details)): ?>
+                <?php if (isset($details['goods_receipt'])): ?>
+                  GR: <?php echo htmlspecialchars($details['goods_receipt']) ?><br>
+                <?php endif; ?>
+                <?php if (isset($details['purchase_order'])): ?>
+                  <a href="<?php echo BASE_URL; ?>Module3/purchase_orders.php?id=<?php echo $details['purchase_order']['id'] ?>" target="_blank" class="reference-link">
+                    PO: <?php echo htmlspecialchars($details['purchase_order']['number']) ?>
+                  </a>
+                <?php endif; ?>
+              <?php else: ?>
+                <?php echo htmlspecialchars($trans['reference'] ?: '-') ?>
+              <?php endif; ?>
+            </td>
+            <td><?php echo $trans['trans_date'] ?></td>
+            <td><?php echo htmlspecialchars($trans['user_name']) ?></td>
+          </tr>
+        <?php endforeach; ?>
       </tbody>
     </table>
   </div>
@@ -275,7 +404,7 @@ $warehouses = $pdo->query("SELECT id, code, name FROM locations ORDER BY name")-
       <h2>Transfer Product</h2>
       <span class="close" onclick="closeTransferModal()">&times;</span>
     </div>
-    <form method="post" action="<?php echo BASE_URL; ?>Module1/transfer_handle.php"> <!-- UPDATED THIS LINE -->
+    <form method="post" action="<?php echo BASE_URL; ?>Module1/transfer_handle.php">
       <input type="hidden" name="product_id" id="transferProductId">
       <input type="hidden" name="from_warehouse_id" id="transferFromWarehouseId">
 

@@ -1,4 +1,5 @@
 <?php
+session_start();
 require '../db.php';
 require '../shared/config.php';
 
@@ -69,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Handle status update - updated to match your enum values
+// Handle status update - CORRECTED FOR YOUR DATABASE SCHEMA
 if (isset($_GET['action']) && in_array($_GET['action'], ['send', 'confirm', 'deliver', 'cancel']) && isset($_GET['id'])) {
     $status_map = [
         'send' => 'sent',
@@ -79,12 +80,121 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['send', 'confirm', 'del
     ];
     
     try {
+        $pdo->beginTransaction();
+        
+        // Update purchase order status
         $stmt = $pdo->prepare("UPDATE purchase_orders SET status = ? WHERE id = ?");
         $stmt->execute([$status_map[$_GET['action']], $_GET['id']]);
+        
+        // When delivered, create goods receipt and update inventory
+        if ($_GET['action'] === 'deliver') {
+            $po_id = $_GET['id'];
+            
+            // Get PO details
+            $stmt = $pdo->prepare("
+                SELECT po.*, s.name as supplier_name 
+                FROM purchase_orders po
+                LEFT JOIN suppliers s ON po.supplier_id = s.id
+                WHERE po.id = ?
+            ");
+            $stmt->execute([$po_id]);
+            $po = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$po) {
+                throw new Exception("Purchase order not found");
+            }
+            
+            // Get PO items with product and warehouse info
+            $stmt = $pdo->prepare("
+                SELECT poi.id as po_item_id, poi.product_id, poi.quantity, p.warehouse_id as location_id, p.name as product_name
+                FROM purchase_order_items poi
+                JOIN products p ON poi.product_id = p.id
+                WHERE poi.po_id = ?
+            ");
+            $stmt->execute([$po_id]);
+            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (empty($items)) {
+                throw new Exception("No items found in purchase order");
+            }
+            
+            // Create goods receipt
+            $receipt_number = 'GR-' . date('Ymd') . '-' . str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT);
+            $stmt = $pdo->prepare("
+                INSERT INTO goods_receipts 
+                (receipt_number, po_id, receipt_date, received_by, location_id, notes)
+                VALUES (?, ?, NOW(), ?, ?, ?)
+            ");
+            
+            // Use the first item's location as receipt location
+            $receipt_location = $items[0]['location_id'] ?? null;
+            $notes = "Auto-generated from PO: " . $po['po_number'] . " - Supplier: " . $po['supplier_name'];
+            
+            $stmt->execute([
+                $receipt_number,
+                $po_id,
+                $_SESSION['user_name'] ?? 'System',
+                $receipt_location,
+                $notes
+            ]);
+            $gr_id = $pdo->lastInsertId();
+            
+            // Process each item
+            foreach ($items as $item) {
+                // Create goods receipt item - CORRECTED COLUMN NAMES
+                $stmt = $pdo->prepare("
+                    INSERT INTO goods_receipt_items (receipt_id, po_item_id, quantity_received, expiration_date)
+                    VALUES (?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $gr_id, 
+                    $item['po_item_id'], 
+                    $item['quantity'],
+                    null // expiration_date can be null
+                ]);
+                
+                // Update inventory in product_locations
+                $stmt = $pdo->prepare("
+                    INSERT INTO product_locations (product_id, location_id, quantity)
+                    VALUES (?, ?, ?)
+                    ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+                ");
+                $stmt->execute([
+                    $item['product_id'],
+                    $item['location_id'],
+                    $item['quantity']
+                ]);
+                
+                // Record stock transaction
+                $stmt = $pdo->prepare("
+                    INSERT INTO stock_transactions 
+                    (product_id, location_from, location_to, qty, type, reference, note, trans_date, user_name, reference_id, reference_type)
+                    VALUES (?, NULL, ?, ?, 'stock-in', ?, ?, NOW(), ?, ?, 'gr')
+                ");
+                $stmt->execute([
+                    $item['product_id'],
+                    $item['location_id'],
+                    $item['quantity'],
+                    $receipt_number,
+                    "Received from PO: " . $po['po_number'],
+                    $_SESSION['user_name'] ?? 'System',
+                    $gr_id
+                ]);
+            }
+        }
+        
+        $pdo->commit();
         header("Location: purchase_orders.php?status=updated");
         exit;
     } catch (Exception $e) {
-        $error = "Error updating purchase order: " . $e->getMessage();
+        $pdo->rollBack();
+        // Show detailed error for debugging
+        $error = "<div style='color:red; padding:20px; border:1px solid red; margin:20px;'>";
+        $error .= "<h3>Detailed Error:</h3>";
+        $error .= "<p><strong>Message:</strong> " . $e->getMessage() . "</p>";
+        $error .= "<p><strong>File:</strong> " . $e->getFile() . "</p>";
+        $error .= "<p><strong>Line:</strong> " . $e->getLine() . "</p>";
+        $error .= "</div>";
     }
 }
 
@@ -719,14 +829,36 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
         console.log('updateStatus called with id:', id, 'action:', action);
         const actionMap = {
             'send': 'send this purchase order to the supplier?',
-            'receive': 'mark this purchase order as received?',
+            'confirm': 'confirm this purchase order?',
+            'deliver': 'mark this purchase order as delivered and update inventory?',
             'cancel': 'cancel this purchase order?'
         };
         
         if (confirm(`Are you sure you want to ${actionMap[action]}`)) {
-            const url = '<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=' + action + '&id=' + id;
-            console.log('Redirecting to:', url);
-            window.location.href = url;
+            // Show processing indicator for delivery action
+            if (action === 'deliver') {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Processing...';
+                btn.disabled = true;
+                
+                // Use fetch to show progress
+                fetch(`<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=${action}&id=${id}`)
+                    .then(response => {
+                        if (!response.redirected) {
+                            throw new Error('Server error');
+                        }
+                        window.location.href = response.url;
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error updating purchase order status');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    });
+            } else {
+                window.location.href = `<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=${action}&id=${id}`;
+            }
         }
     }
 
