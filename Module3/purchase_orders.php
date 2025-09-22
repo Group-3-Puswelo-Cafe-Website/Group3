@@ -803,6 +803,58 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                     </div>
                 `;
                 
+                // NEW: Check for related invoices
+                let invoiceHtml = '';
+                if (data.invoices && data.invoices.length > 0) {
+                    invoiceHtml = `
+                        <div class="items-section">
+                            <div class="items-header">Related Invoices</div>
+                            <ul class="items-list">
+                    `;
+                    
+                    data.invoices.forEach(invoice => {
+                        invoiceHtml += `
+                            <li>
+                                <div class="item-info">
+                                    <div class="item-name">
+                                        <a href="<?php echo BASE_URL; ?>Module3/invoices.php" target="_blank">
+                                            ${invoice.invoice_number}
+                                        </a>
+                                    </div>
+                                    <div class="item-meta">
+                                        ${new Date(invoice.invoice_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                        - Due: ${new Date(invoice.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                    </div>
+                                </div>
+                                <div class="item-price">
+                                    <div class="item-unit-price">
+                                        <span class="status-badge status-${invoice.status.toLowerCase()}">
+                                            ${invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                                        </span>
+                                    </div>
+                                    <div class="item-total">₱${parseFloat(invoice.total_amount).toFixed(2)}</div>
+                                </div>
+                            </li>
+                        `;
+                    });
+                    
+                    invoiceHtml += `
+                            </ul>
+                        </div>
+                    `;
+                } else if (po.status === 'delivered') {
+                    // If PO is delivered but no invoice exists, show option to create one
+                    invoiceHtml = `
+                        <div class="items-section" style="background-color: #f8f9fa; border: 1px dashed #ddd;">
+                            <div class="items-header">Invoice</div>
+                            <div style="padding: 15px; text-align: center;">
+                                <p style="margin: 0 0 15px 0; color: #666;">No invoice created yet for this purchase order</p>
+                                <button class="btn btn-primary" onclick="createInvoice(${po.id})">Create Invoice</button>
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 // Add action buttons at the bottom
                 let actionsHtml = `
                     <div class="modal-actions">
@@ -839,7 +891,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                 
                 const viewContent = document.getElementById('viewContent');
                 if (viewContent) {
-                    viewContent.innerHTML = detailsHtml + itemsHtml + actionsHtml;
+                    viewContent.innerHTML = detailsHtml + itemsHtml + invoiceHtml + actionsHtml;
                     document.getElementById('viewModal').style.display = 'flex';
                     console.log('View modal opened');
                 } else {
@@ -850,6 +902,11 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                 console.error('Fetch error:', error);
                 alert('Error loading purchase order details. Please check the console for more information.');
             });
+    }
+
+    // NEW: Function to create invoice from PO modal
+    function createInvoice(poId) {
+        window.location.href = `<?php echo BASE_URL; ?>Module3/invoices.php?po_id=${poId}`;
     }
 
     function closeViewModal() {

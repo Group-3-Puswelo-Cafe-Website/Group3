@@ -1,17 +1,15 @@
 <?php
 require '../db.php';
 
-header('Content-Type: application/json');
-
 if (!isset($_GET['id'])) {
-    echo json_encode(['error' => 'Purchase Order ID is required']);
+    echo json_encode(['error' => 'Missing ID parameter']);
     exit;
 }
 
 $po_id = $_GET['id'];
 
 try {
-    // Get purchase order details
+    // Get PO details
     $stmt = $pdo->prepare("
         SELECT po.*, s.name as supplier_name
         FROM purchase_orders po
@@ -26,21 +24,31 @@ try {
         exit;
     }
     
-    // Get purchase order items
+    // Get PO items
     $stmt = $pdo->prepare("
         SELECT poi.*, p.name as product_name
         FROM purchase_order_items poi
-        LEFT JOIN products p ON poi.product_id = p.id
+        JOIN products p ON poi.product_id = p.id
         WHERE poi.po_id = ?
     ");
     $stmt->execute([$po_id]);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
+    // Get related invoices
+    $stmt = $pdo->prepare("
+        SELECT i.*
+        FROM invoices i
+        WHERE i.po_id = ?
+        ORDER BY i.invoice_date DESC
+    ");
+    $stmt->execute([$po_id]);
+    $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
     echo json_encode([
         'purchase_order' => $purchase_order,
-        'items' => $items
+        'items' => $items,
+        'invoices' => $invoices
     ]);
 } catch (Exception $e) {
     echo json_encode(['error' => $e->getMessage()]);
 }
-?>
