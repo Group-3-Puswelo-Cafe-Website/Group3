@@ -2,6 +2,28 @@
 require '../db.php';
 require '../shared/config.php';
 
+// Handle requisition number search
+$req_number = $_GET['req'] ?? '';
+if ($req_number) {
+    $requisitions = $pdo->prepare("
+        SELECT pr.*,
+               (SELECT COUNT(*) FROM purchase_requisition_items WHERE requisition_id = pr.id) as item_count
+        FROM purchase_requisitions pr
+        WHERE pr.requisition_number = ?
+        ORDER BY pr.created_at DESC
+    ");
+    $requisitions->execute([$req_number]);
+    $requisitions = $requisitions->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    // Load all requisitions with item details
+    $requisitions = $pdo->query("
+        SELECT pr.*,
+               (SELECT COUNT(*) FROM purchase_requisition_items WHERE requisition_id = pr.id) as item_count
+        FROM purchase_requisitions pr
+        ORDER BY pr.created_at DESC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+}
+
 // Handle delete
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
     try {
@@ -89,14 +111,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'approve' && isset($_GET['id']
         $error = "Error approving requisition: " . $e->getMessage();
     }
 }
-
-// Load all requisitions with item details
-$requisitions = $pdo->query("
-    SELECT pr.*,
-           (SELECT COUNT(*) FROM purchase_requisition_items WHERE requisition_id = pr.id) as item_count
-    FROM purchase_requisitions pr
-    ORDER BY pr.created_at DESC
-")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
 <html>

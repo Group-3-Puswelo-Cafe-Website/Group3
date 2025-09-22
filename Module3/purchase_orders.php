@@ -437,6 +437,12 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
         .requisition-item:last-child {
             border-bottom: none;
         }
+        .modal-actions {
+            margin-top: 20px;
+            text-align: center;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
     </style>
 </head>
 <body>
@@ -494,7 +500,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                             <td><?php echo htmlspecialchars($po['po_number']); ?></td>
                             <td>
                                 <?php if ($po['requisition_number']): ?>
-                                    <a href="purchase_requisitions.php" target="_blank">
+                                    <a href="<?php echo BASE_URL; ?>Module3/purchase_requisitions.php?req=<?php echo urlencode($po['requisition_number']) ?>" target="_blank">
                                         <?php echo htmlspecialchars($po['requisition_number']); ?>
                                     </a>
                                 <?php else: ?>
@@ -521,7 +527,9 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                                 <?php if ($po['status'] === 'confirmed'): ?>
                                     <button class="btn btn-primary" onclick="updateStatus(<?php echo $po['id']; ?>, 'deliver')">Deliver</button>
                                 <?php endif; ?>
-                                <?php if ($po['status'] !== 'delivered'): ?>
+                                
+                                <!-- Delete button for draft, sent, confirmed, and cancelled status -->
+                                <?php if (in_array($po['status'], ['draft', 'sent', 'confirmed', 'cancelled'])): ?>
                                     <button class="btn btn-danger" onclick="deletePurchaseOrder(<?php echo $po['id']; ?>)">Delete</button>
                                 <?php endif; ?>
                             </td>
@@ -744,10 +752,6 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                             <div class="detail-value">${new Date(po.order_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
                         </div>
                         <div class="detail-row">
-                            <div class="detail-label">Expected Delivery:</div>
-                            <div class="detail-value">${new Date(po.expected_delivery_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                        </div>
-                        <div class="detail-row">
                             <div class="detail-label">Status:</div>
                             <div class="detail-value">
                                 <span class="status-badge status-${po.status.toLowerCase()}">${po.status.charAt(0).toUpperCase() + po.status.slice(1)}</span>
@@ -799,9 +803,43 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                     </div>
                 `;
                 
+                // Add action buttons at the bottom
+                let actionsHtml = `
+                    <div class="modal-actions">
+                `;
+                
+                // Add status-based action buttons
+                if (po.status === 'draft') {
+                    actionsHtml += `
+                        <button class="btn btn-success" onclick="updateStatusFromModal(${po.id}, 'send')">Send</button>
+                    `;
+                }
+                if (po.status === 'sent') {
+                    actionsHtml += `
+                        <button class="btn btn-info" onclick="updateStatusFromModal(${po.id}, 'confirm')">Confirm</button>
+                    `;
+                }
+                if (po.status === 'confirmed') {
+                    actionsHtml += `
+                        <button class="btn btn-primary" onclick="updateStatusFromModal(${po.id}, 'deliver')">Deliver</button>
+                    `;
+                }
+                
+                // Add delete button for appropriate statuses
+                if (inArray(po.status, ['draft', 'sent', 'confirmed', 'cancelled'])) {
+                    actionsHtml += `
+                        <button class="btn btn-danger" onclick="deletePurchaseOrderFromModal(${po.id})">Delete</button>
+                    `;
+                }
+                
+                actionsHtml += `
+                        <button class="btn" onclick="closeViewModal()">Close</button>
+                    </div>
+                `;
+                
                 const viewContent = document.getElementById('viewContent');
                 if (viewContent) {
-                    viewContent.innerHTML = detailsHtml + itemsHtml;
+                    viewContent.innerHTML = detailsHtml + itemsHtml + actionsHtml;
                     document.getElementById('viewModal').style.display = 'flex';
                     console.log('View modal opened');
                 } else {
@@ -868,6 +906,53 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
             const url = '<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=delete&id=' + id;
             console.log('Redirecting to:', url);
             window.location.href = url;
+        }
+    }
+
+    // Helper function to check if value is in array
+    function inArray(value, array) {
+        return array.indexOf(value) !== -1;
+    }
+
+    // Update status from modal
+    function updateStatusFromModal(id, action) {
+        const actionMap = {
+            'send': 'send this purchase order to the supplier?',
+            'confirm': 'confirm this purchase order?',
+            'deliver': 'mark this purchase order as delivered and update inventory?',
+            'cancel': 'cancel this purchase order?'
+        };
+        
+        if (confirm(`Are you sure you want to ${actionMap[action]}`)) {
+            if (action === 'deliver') {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Processing...';
+                btn.disabled = true;
+                
+                fetch(`<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=${action}&id=${id}`)
+                    .then(response => {
+                        if (!response.redirected) {
+                            throw new Error('Server error');
+                        }
+                        window.location.href = response.url;
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error updating purchase order status');
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    });
+            } else {
+                window.location.href = `<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=${action}&id=${id}`;
+            }
+        }
+    }
+
+    // Delete purchase order from modal
+    function deletePurchaseOrderFromModal(id) {
+        if (confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) {
+            window.location.href = `<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=delete&id=${id}`;
         }
     }
 
