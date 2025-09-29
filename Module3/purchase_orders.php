@@ -8,7 +8,54 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
     try {
         $pdo->beginTransaction();
         
-        // Delete purchase order items first
+        // Check if PO is delivered
+        $stmt = $pdo->prepare("SELECT status FROM purchase_orders WHERE id = ?");
+        $stmt->execute([$_GET['id']]);
+        $po = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($po && $po['status'] === 'delivered') {
+            // Get all goods receipts related to this PO
+            $stmt = $pdo->prepare("SELECT id FROM goods_receipts WHERE po_id = ?");
+            $stmt->execute([$_GET['id']]);
+            $receipts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            foreach ($receipts as $receipt) {
+                // Get goods receipt items
+                $stmt = $pdo->prepare("
+                    SELECT gri.*, poi.product_id, poi.quantity, pl.location_id 
+                    FROM goods_receipt_items gri
+                    JOIN purchase_order_items poi ON gri.po_item_id = poi.id
+                    JOIN product_locations pl ON poi.product_id = pl.product_id
+                    WHERE gri.receipt_id = ?
+                ");
+                $stmt->execute([$receipt['id']]);
+                $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Update inventory to reverse the stock-in
+                foreach ($items as $item) {
+                    $stmt = $pdo->prepare("
+                        UPDATE product_locations 
+                        SET quantity = quantity - ? 
+                        WHERE product_id = ? AND location_id = ?
+                    ");
+                    $stmt->execute([$item['quantity'], $item['product_id'], $item['location_id']]);
+                }
+                
+                // Delete goods receipt items
+                $stmt = $pdo->prepare("DELETE FROM goods_receipt_items WHERE receipt_id = ?");
+                $stmt->execute([$receipt['id']]);
+                
+                // Delete stock transactions related to this goods receipt
+                $stmt = $pdo->prepare("DELETE FROM stock_transactions WHERE reference_id = ? AND reference_type = 'gr'");
+                $stmt->execute([$receipt['id']]);
+            }
+            
+            // Delete goods receipts
+            $stmt = $pdo->prepare("DELETE FROM goods_receipts WHERE po_id = ?");
+            $stmt->execute([$_GET['id']]);
+        }
+        
+        // Delete purchase order items
         $stmt = $pdo->prepare("DELETE FROM purchase_order_items WHERE po_id = ?");
         $stmt->execute([$_GET['id']]);
         
@@ -199,7 +246,7 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['send', 'confirm', 'del
 }
 
 // Load all purchase orders with supplier and item details
-$purchase_orders = $pdo->query("
+ $purchase_orders = $pdo->query("
     SELECT po.*,
            s.name as supplier_name,
            pr.requisition_number,
@@ -212,17 +259,17 @@ $purchase_orders = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 // Load suppliers for dropdown
-$suppliers = $pdo->query("SELECT * FROM suppliers ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+ $suppliers = $pdo->query("SELECT * FROM suppliers ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Load approved requisitions for dropdown
-$requisitions = $pdo->query("
+ $requisitions = $pdo->query("
     SELECT * FROM purchase_requisitions 
     WHERE status = 'approved' 
     ORDER BY created_at DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 // Load products for dropdown
-$products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
 <html>
@@ -528,8 +575,8 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                                     <button class="btn btn-primary" onclick="updateStatus(<?php echo $po['id']; ?>, 'deliver')">Deliver</button>
                                 <?php endif; ?>
                                 
-                                <!-- Delete button for draft, sent, confirmed, and cancelled status -->
-                                <?php if (in_array($po['status'], ['draft', 'sent', 'confirmed', 'cancelled'])): ?>
+                                <!-- Delete button for draft, sent, confirmed, cancelled, and delivered status -->
+                                <?php if (in_array($po['status'], ['draft', 'sent', 'confirmed', 'cancelled', 'delivered'])): ?>
                                     <button class="btn btn-danger" onclick="deletePurchaseOrder(<?php echo $po['id']; ?>)">Delete</button>
                                 <?php endif; ?>
                             </td>
@@ -878,7 +925,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
                 }
                 
                 // Add delete button for appropriate statuses
-                if (inArray(po.status, ['draft', 'sent', 'confirmed', 'cancelled'])) {
+                if (inArray(po.status, ['draft', 'sent', 'confirmed', 'cancelled', 'delivered'])) {
                     actionsHtml += `
                         <button class="btn btn-danger" onclick="deletePurchaseOrderFromModal(${po.id})">Delete</button>
                     `;
@@ -959,7 +1006,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
 
     function deletePurchaseOrder(id) {
         console.log('deletePurchaseOrder called with id:', id);
-        if (confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) {
+        if (confirm('Are you sure you want to delete this purchase order? If it has been delivered, this will also remove all related goods receipts and reverse inventory updates. This action cannot be undone.')) {
             const url = '<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=delete&id=' + id;
             console.log('Redirecting to:', url);
             window.location.href = url;
@@ -1008,7 +1055,7 @@ $products = $pdo->query("SELECT * FROM products ORDER BY name")->fetchAll(PDO::F
 
     // Delete purchase order from modal
     function deletePurchaseOrderFromModal(id) {
-        if (confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) {
+        if (confirm('Are you sure you want to delete this purchase order? If it has been delivered, this will also remove all related goods receipts and reverse inventory updates. This action cannot be undone.')) {
             window.location.href = `<?php echo BASE_URL; ?>Module3/purchase_orders.php?action=delete&id=${id}`;
         }
     }
